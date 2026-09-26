@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ufq · AML alert prioritization</title>
+<meta name="description" content="Team Ufq's exploratory data analysis for the WIUT Hackathon 2026 FinTech task: which bank alerts deserve attention first.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+ --bg:#FFFFFF;--bg-2:#F5F6F4;--ink:#16202B;--ink-2:#3C4753;--muted:#66717C;--rule:#E1E5E8;--rule-2:#C9D0D6;
+ --serious:#2A4FA8;--false:#848E98;--ours:#1E9E9A;--ours-soft:#E6F4F3;--brand:#22408F;
+ color-scheme:light}
+*{box-sizing:border-box}
+html{background:var(--bg);-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Newsreader,Georgia,serif;font-size:1.125rem;line-height:1.62}
+.sans,.kicker,.byline,.label,.fig-head,.fig-foot,.legend,.seg,.note-label,.stat,.steps,.summary ol li::before,table,.review-top,.q-cap,.sc,footer,summary,.tip,.chart text{font-family:'Public Sans',Arial,sans-serif}
+.wrap{max-width:44rem;margin:0 auto;padding:0 16px}
+a{color:var(--brand);text-underline-offset:3px}
+a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
+p{margin:.8rem 0}
+strong{font-weight:600}
+h1,h2,h3{font-weight:500;letter-spacing:-.005em}
+
+/* header */
+header{padding:0 0 1rem;position:relative}
+.band{height:6px;background:repeating-linear-gradient(90deg,var(--brand) 0 34px,var(--ours) 34px 40px,var(--bg) 40px 46px);margin:0 0 3rem}
+.kicker{font-size:.78rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);margin:0 0 1rem}
+h1{font-size:clamp(2.15rem,5.6vw,3.3rem);line-height:1.08;margin:0 0 1.1rem}
+.dek{font-size:1.28rem;line-height:1.5;color:var(--ink-2);margin:0 0 1.2rem}
+.byline{font-size:.85rem;color:var(--muted);margin:0;padding-bottom:1.6rem;border-bottom:1px solid var(--rule)}
+
+/* summary + approach */
+.block{margin:2.2rem 0 0}
+.block-title{font-family:'Public Sans',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);margin:0 0 .6rem}
+.summary{border-top:2px solid var(--ink);padding-top:.8rem}
+.summary ol{list-style:none;margin:0;padding:0;counter-reset:k}
+.summary li{counter-increment:k;position:relative;padding:.7rem 0 .7rem 2.2rem;border-bottom:1px solid var(--rule);line-height:1.5}
+.summary li::before{content:counter(k);position:absolute;left:0;top:.72rem;font-size:.85rem;font-weight:700;color:var(--ours)}
+.summary li a{color:inherit;text-decoration:none}
+.summary li a:hover strong{text-decoration:underline;text-underline-offset:3px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:2px solid var(--ink);padding-top:.9rem;counter-reset:s}
+.step{counter-increment:s;padding:0 14px 0 0;position:relative;text-decoration:none;color:inherit;display:block}
+.step::before{content:counter(s);display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--ours);color:var(--ours);font-size:.8rem;font-weight:700;margin-bottom:.55rem;background:var(--bg);position:relative;z-index:1}
+.step::after{content:"";position:absolute;top:13px;left:26px;right:0;height:1px;background:var(--rule-2)}
+.step:last-child::after{display:none}
+.step b{display:block;font-size:.92rem;font-weight:600;margin-bottom:.2rem}
+.step span{display:block;font-size:.84rem;line-height:1.45;color:var(--ink-2)}
+.step:hover b{text-decoration:underline;text-underline-offset:3px}
+.steps-note{font-family:'Public Sans',sans-serif;font-size:.84rem;color:var(--muted);margin:.9rem 0 0}
+
+/* sections */
+section{padding-top:1rem}
+.label{display:flex;align-items:center;gap:10px;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:3.6rem 0 .5rem}
+.label::before{content:"";width:18px;height:2px;background:var(--ours)}
+h2{font-size:clamp(1.6rem,4.2vw,2.05rem);line-height:1.18;margin:0 0 .9rem}
+h3{font-size:1.3rem;line-height:1.25;margin:2.2rem 0 .4rem}
+ul.plain{padding-left:1.2rem;margin:.6rem 0}
+ul.plain li{margin:.35rem 0}
+.bridge{font-style:italic;color:var(--ink-2);margin:1.6rem 0 0}
+.pull{font-size:1.45rem;line-height:1.38;font-weight:500;margin:1.4rem 0;padding:0 0 0 1rem;border-left:3px solid var(--serious)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.82em;background:var(--bg-2);padding:.08em .35em;border-radius:3px}
+
+/* model notes */
+.note{background:var(--bg-2);border-left:3px solid var(--ours);padding:.85rem 1.1rem .9rem;margin:1.7rem 0 0}
+.note-label{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:0 0 .25rem}
+.note p{margin:.25rem 0;font-size:1.02rem;line-height:1.55}
+
+/* figures */
+.fig{margin:1.8rem 0 1.2rem;border-top:1px solid var(--ink);padding-top:.75rem}
+.fig-head{margin:0 0 .7rem}
+.fig-head b{display:block;font-size:1rem;font-weight:600;line-height:1.35}
+.fig-head span{display:block;font-size:.86rem;color:var(--muted);line-height:1.45;margin-top:.15rem}
+.fig-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:.78rem;color:var(--muted);margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--rule)}
+.tbtn{font:inherit;font-weight:600;color:var(--ink-2);background:none;border:1px solid var(--rule-2);border-radius:4px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+.tbtn:hover{border-color:var(--ink-2)}
+.tbl{overflow-x:auto;margin-top:.6rem}
+.legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:.84rem;color:var(--ink-2);margin:0 0 .6rem}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:11px;height:11px;border-radius:2px;background:var(--c);display:inline-block}
+.legend i.line{height:2px;width:16px;border-radius:1px}
+.chart{position:relative;width:100%;touch-action:pan-y}
+.chart svg{display:block;width:100%;overflow:visible}
+.chart text{font-size:12px;fill:var(--muted)}
+.chart .t-ink{fill:var(--ink)}
+.chart .t-ink2{fill:var(--ink-2)}
+.hit{cursor:default}
+.tip{position:absolute;left:0;top:0;pointer-events:none;background:var(--ink);color:#fff;font-size:.8rem;line-height:1.45;padding:7px 10px;border-radius:5px;white-space:nowrap;opacity:0;transition:opacity .1s;z-index:5;transform:translate(-50%,calc(-100% - 10px))}
+.tip.on{opacity:1}
+.tip b{font-weight:700}
+.tip .k{display:inline-block;width:12px;height:2px;vertical-align:middle;margin-right:6px}
+.tip .m{color:#B9C1C9}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--rule-2);border-radius:6px;overflow:hidden;margin:0 0 .8rem}
+.seg button{font:inherit;font-size:.84rem;font-weight:500;border:0;border-right:1px solid var(--rule-2);background:var(--bg);color:var(--ink-2);padding:7px 13px;cursor:pointer;min-height:36px}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.takeaway{font-family:'Public Sans',sans-serif;font-size:.9rem;line-height:1.5;color:var(--ink);margin:.7rem 0 0;min-height:2.8em}
+
+/* waffle grids */
+.waffle{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;width:100%;max-width:300px}
+.waffle i{aspect-ratio:1;border-radius:2px;background:#DDE1E5;display:block;transition:opacity .15s,background .15s}
+.waffle i.s{background:var(--serious)}
+.waffle i.f{background:#C3C9CF}
+.waffle i.off{opacity:.2}
+.target-row{display:flex;gap:28px;align-items:center;flex-wrap:wrap}
+.target-row .big{font-family:'Public Sans',sans-serif}
+.big b{display:block;font-size:2.6rem;font-weight:600;line-height:1;color:var(--ink)}
+.big span{display:block;font-size:.86rem;color:var(--muted);margin-top:.35rem;max-width:16rem;line-height:1.45}
+
+/* data diagram */
+.schema{display:grid;grid-template-columns:1fr 56px 1fr;align-items:stretch;margin:1.2rem 0 .4rem}
+.tcard{border:1px solid var(--rule-2);border-radius:6px;background:var(--bg);overflow:hidden;font-family:'Public Sans',sans-serif}
+.tcard h4{margin:0;padding:.6rem .8rem;font-size:.92rem;font-weight:600;background:var(--bg-2);border-bottom:1px solid var(--rule)}
+.tcard h4 small{display:block;font-size:.76rem;font-weight:400;color:var(--muted);margin-top:.15rem;line-height:1.4}
+.tcard dl{margin:0;padding:.35rem .8rem .5rem;font-size:.8rem}
+.tcard dt{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.76rem;color:var(--ink);margin-top:.45rem}
+.tcard dd{margin:.05rem 0 0;color:var(--ink-2);line-height:1.4}
+.link{display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Public Sans',sans-serif;font-size:.7rem;color:var(--muted);text-align:center;line-height:1.3;position:relative}
+.link::before{content:"";position:absolute;left:4px;right:4px;top:50%;height:1px;background:var(--rule-2)}
+.link span{background:var(--bg);position:relative;padding:2px 0}
+.link .mb{display:none;padding:2px 8px}
+
+/* stats row */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--ink);border-bottom:1px solid var(--rule);margin:1.2rem 0}
+.stat{padding:.9rem 14px .9rem 0}
+.stat+.stat{padding-left:14px;border-left:1px solid var(--rule)}
+.stat b{display:block;font-size:1.9rem;font-weight:600;line-height:1.1}
+.stat span{display:block;font-size:.8rem;color:var(--ink-2);line-height:1.4;margin-top:.3rem}
+
+/* scorecards */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sc{border:1px solid var(--rule-2);border-radius:6px;padding:.8rem .9rem .7rem;font-size:.84rem}
+.sc-head{display:flex;flex-direction:column;gap:2px;margin-bottom:.6rem}
+.sc-head b{font-size:.92rem;font-weight:600}
+.sc-head span{color:var(--ink-2);display:inline-flex;align-items:center;gap:6px}
+.sc-head i{width:10px;height:10px;border-radius:2px;background:var(--c);display:inline-block}
+.sc table{width:100%;border-collapse:collapse}
+.sc th{text-align:left;font-weight:400;color:var(--ink-2);padding:.38rem 0;line-height:1.3;border-top:1px solid var(--rule);vertical-align:middle}
+.sc th small{display:block;color:var(--muted);font-size:.72rem}
+.sc td{padding:.38rem 0 .38rem 8px;border-top:1px solid var(--rule);vertical-align:middle}
+.sc td.bar{width:34%}
+.sc td.bar i{display:block;height:8px;border-radius:0 3px 3px 0;background:var(--ours)}
+.sc td.v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;width:4.2em;color:var(--ink)}
+.sc tr.fin th,.sc tr.fin td{border-top:1px solid var(--ink);font-weight:600;color:var(--ink)}
+.sc-foot{margin:.5rem 0 0;color:var(--muted);font-size:.78rem}
+
+/* review simulator */
+.review-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:.2rem 0 1rem}
+.review-top label{font-size:.9rem;color:var(--ink-2)}
+.review-top output{font-weight:700;color:var(--ink)}
+.review-top input{flex:1;min-width:200px;accent-color:var(--ink);height:28px}
+.q2{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.q-cap{font-size:.86rem;color:var(--ink-2);margin:0 0 .5rem;line-height:1.35}
+.q-cap b{display:block;color:var(--ink);font-weight:600;font-size:.92rem}
+.q-found{font-family:'Public Sans',sans-serif;margin:.6rem 0 0;font-size:.9rem;color:var(--ink-2)}
+.q-found b{font-size:1.5rem;font-weight:600;color:var(--ink);margin-right:4px}
+.q2 .waffle{max-width:none}
+.result{font-family:'Public Sans',sans-serif;font-size:1rem;font-weight:600;margin:1rem 0 0;padding:.7rem 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+
+
+/* simple example + part 6 */
+.example{background:var(--bg-2);border-top:2px solid var(--ink);padding:1rem 1.2rem 1.1rem;margin:1.2rem 0 1.4rem}
+.example-label{font-family:'Public Sans',sans-serif;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:0 0 .3rem}
+.example p{margin:.45rem 0;font-size:1.05rem;line-height:1.55}
+.ex-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:.8rem 0}
+.ex-two div{background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:.7rem .85rem;font-size:1rem;line-height:1.5}
+.ex-two b{display:block;font-family:'Public Sans',sans-serif;font-size:.86rem;font-weight:700;margin-bottom:.2rem}
+.rt-label{font-family:'Public Sans',sans-serif;font-size:.9rem;color:var(--ink-2)}
+.seg.nums{margin:0}
+.seg.nums button{min-width:44px;font-variant-numeric:tabular-nums}
+.wwrap{position:relative}
+.cut{position:absolute;left:-5px;right:-5px;height:0;border-top:2px solid var(--ink);transition:top .2s}
+.review-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:.2rem 0 1.1rem}
+
+/* technical section */
+.det-intro{font-family:'Public Sans',sans-serif;font-size:.9rem;color:var(--ink-2);display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between}
+h3.grp{font-family:'Public Sans',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:1.8rem 0 .2rem}
+ol.plain{padding-left:1.3rem;margin:.6rem 0}
+ol.plain li{margin:.35rem 0}
+details .tbl{margin:.6rem 0 .8rem}
+
+/* tables + details */
+table{border-collapse:collapse;font-size:.84rem;width:100%}
+th,td{text-align:left;padding:.38rem .7rem .38rem 0;border-bottom:1px solid var(--rule);vertical-align:top}
+thead th{font-weight:600;border-bottom:1px solid var(--ink-2)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.ours td{font-weight:700}
+details{border-top:1px solid var(--rule)}
+details:last-of-type{border-bottom:1px solid var(--rule)}
+summary{cursor:pointer;font-size:.95rem;font-weight:600;padding:.85rem 0;list-style:none;display:flex;gap:10px;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";width:14px;color:var(--ours);font-weight:700}
+details[open] summary::before{content:"\2013"}
+details .inner{padding:0 0 1rem}
+details .inner p,details .inner li{font-size:1.02rem}
+footer{margin-top:3.5rem;padding:1.4rem 0 3.5rem;border-top:1px solid var(--rule);font-size:.8rem;color:var(--muted);line-height:1.55}
+
+@media (max-width:640px){
+ body{font-size:1.06rem}
+ .band{margin-bottom:2.2rem}
+ .dek{font-size:1.14rem}
+ .steps{grid-template-columns:1fr;gap:.9rem;border-top-width:2px}
+ .step{display:grid;grid-template-columns:36px 1fr;column-gap:6px;padding:0}
+ .step::before{grid-row:span 2;margin:0}
+ .step::after{display:none}
+ .schema{grid-template-columns:1fr;gap:0}
+ .link{height:44px}
+ .link::before{left:50%;right:auto;top:4px;bottom:4px;width:1px;height:auto}
+ .stats{grid-template-columns:1fr}
+ .stat+.stat{padding-left:0;border-left:0;border-top:1px solid var(--rule)}
+ .cards{grid-template-columns:1fr}
+ .q2{gap:14px}
+ .pull{font-size:1.2rem}
+ .target-row{gap:18px}
+ .seg{display:grid;grid-template-columns:1fr 1fr;width:100%}
+ .seg button{border-right:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2)}
+ .seg button:nth-child(2n){border-right:0}
+ .seg button:nth-last-child(-n+2):nth-child(odd),.seg button:last-child{border-bottom:0}
+ .link .dk{display:none}
+ .ex-two{grid-template-columns:1fr}
+ .seg.nums{display:inline-flex;width:auto}
+ .seg.nums button{border-bottom:0!important;border-right:1px solid var(--rule-2)!important;min-width:0;padding:7px 11px}
+ .seg.nums button:last-child{border-right:0!important}
+ .link .mb{display:inline}
+}
+</style></head>
+<body>
+<div class="wrap">
+<header>
+ <div class="band" aria-hidden="true"></div>
+ <p class="kicker">WIUT Hackathon 2026 · FinTech / AI in Finance · AML alert prioritization</p>
+ <h1>Big money is not the warning sign. Small transfers are.</h1>
+ <p class="dek">A bank's monitoring team gets more alerts than it can check. We studied 14,000 past alerts and the 7 million payments behind them to learn which alerts should be checked first, and built a model that does this sorting.</p>
+ <p class="byline">Team Ufq · Team ID 1B8F4334 · Exploratory data analysis for the elimination task</p>
+</header>
+
+<div class="block summary">
+ <p class="block-title">Key findings</p>
+ <ol>
+  <li><a href="#problem"><strong>17 of every 100 alerts are serious.</strong> The other 83 are false alarms, so the order in which a team checks alerts matters.</a></li>
+  <li><a href="#before"><strong>Timing and activity do not tell them apart.</strong> Serious and false-alarm customers pay at the same times and only a little more often (6%).</a></li>
+  <li><a href="#sizes"><strong>Payment size does.</strong> Customers with the smallest bank transfers were serious almost twice as often as those with the largest: 23% against 12%.</a></li>
+  <li><a href="#result"><strong>Our model turns this into a better order.</strong> If a team can check 30 of every 100 alerts, it finds 8 of the 17 serious ones with our model and 5 without it.</a></li>
+ </ol>
+</div>
+
+<div class="block">
+ <p class="block-title">Our approach</p>
+ <nav class="steps" aria-label="Our approach">
+  <a class="step" href="#problem"><b>Understand the problem</b><span>What an alert is, and how many are serious.</span></a>
+  <a class="step" href="#data"><b>Explore the payments</b><span>Compare serious and false-alarm customers: what they pay, when, and how much.</span></a>
+  <a class="step" href="#sizes"><b>Turn findings into clues</b><span>Each finding becomes numbers that describe an alert: 208 clues in total.</span></a>
+  <a class="step" href="#model"><b>Build and test a model</b><span>A simple scoring model, tested only on alerts it had not seen.</span></a>
+ </nav>
+ <p class="steps-note">Each section ends with a short note on what we did with the finding in the model.</p>
+</div>
+
+<!-- 1 -->
+<section id="problem">
+<p class="label">1 · The problem</p>
+<h2>Only 17 of every 100 alerts are serious</h2>
+<p>Banks use software that watches every payment. When a customer looks unusual, the software raises an <strong>alert</strong>. A specialist then reviews the alert and makes one of two decisions:</p>
+<ul class="plain">
+ <li><strong>Serious</strong>: send it for a full investigation (in the data: <em>escalated</em>).</li>
+ <li><strong>False alarm</strong>: close it (in the data: <em>dismissed</em>).</li>
+</ul>
+<figure class="fig" id="f-target">
+ <figcaption class="fig-head"><b>Out of every 100 alerts</b><span>This is the target we predict. Training data: 2,405 serious alerts (1) and 11,595 false alarms (0)</span></figcaption>
+ <div class="target-row">
+  <div class="waffle" id="w-target" role="img" aria-label="17 of 100 squares are serious"></div>
+  <div class="big"><b>17%</b><span>of alerts were serious. The other 83% were false alarms.</span>
+   <div class="legend" style="margin-top:.9rem"><span><i style="--c:var(--serious)"></i>Serious</span><span><i style="--c:#C3C9CF"></i>False alarm</span></div></div>
+ </div>
+ <div class="fig-foot"><span>Source: competition training data, 14,000 alerts</span><button class="tbtn" data-t="t-target" aria-expanded="false">Show table</button></div>
+ <div class="tbl" id="t-target" hidden></div>
+</figure>
+<p>This matters for the bank itself. The money being hidden is not the bank's money, but a bank that lets it pass can face large fines and even lose its license. Specialists cannot study every alert deeply, so the <strong>order</strong> in which they check alerts is important.</p>
+<p>The share of serious alerts stays almost the same over time: between 16% and 19% in every three-month period of 2025–2026. So the date of an alert tells us very little.</p>
+<aside class="note"><p class="note-label">For the model</p><p>We do not ask the model for a yes-or-no answer. We ask for a chance between 0 and 1 and sort the alerts by it. A model that calls every alert a false alarm would be right 83% of the time and still catch no one. The competition's score (ROC-AUC) also checks only the order.</p></aside>
+<p class="bridge">So what makes the 17 different from the other 83? Everything we know about them is in their payments.</p>
+</section>
+
+<!-- 2 -->
+<section id="data">
+<p class="label">2 · The data</p>
+<h2>Each alert comes with six months of payments</h2>
+<p>The data has two parts, linked by the alert ID:</p>
+<div class="schema" role="group" aria-label="Structure of the data">
+ <div class="tcard"><h4>Alerts<small>14,000 training alerts with the decision · 6,000 test alerts without it</small></h4>
+  <dl><dt>signal_id</dt><dd>alert ID</dd><dt>signal_sanasi</dt><dd>date of the alert</dd><dt>eskalatsiya</dt><dd>1 = serious, 0 = false alarm (training only)</dd></dl></div>
+ <div class="link" aria-hidden="true"><span class="dk">1 alert<br>→<br>~500<br>payments</span><span class="mb">1 alert → about 500 payments</span></div>
+ <div class="tcard"><h4>Payments<small>7.0 million for training alerts · 3.0 million for test alerts</small></h4>
+  <dl><dt>tranzaksiya_vaqti</dt><dd>date and time</dd><dt>kirim_chiqim</dt><dd>in or out</dd><dt>tranzaksiya_turi</dt><dd>card, bank transfer, cash or international</dd><dt>miqdor_indeksi</dt><dd>size, as a standard index (not real money)</dd></dl></div>
+</div>
+<p>Each alert has the customer's payments from the <strong>180 days</strong> before it: 499 on average, from 1 to 2,279. Alerts come from 2025 and 2026. The organizers created this data with a computer, so it contains no real customers. It is also clean: no missing values, no repeated IDs, and no payment belongs to two alerts. Four types in two directions give <strong>eight kinds</strong> of payments.</p>
+<figure class="fig" id="f-kinds">
+ <figcaption class="fig-head"><b>Payments per customer, by kind</b><span>Average number in the 180 days before the alert. On the right: how many more payments serious customers make.</span></figcaption>
+ <div class="legend"><span><i style="--c:var(--serious)"></i>Serious</span><span><i style="--c:var(--false)"></i>False alarm</span></div>
+ <div class="chart" id="c-kinds"></div>
+ <div class="fig-foot"><span>Source: competition training data, 6,987,663 payments</span><button class="tbtn" data-t="t-kinds" aria-expanded="false">Show table</button></div>
+ <div class="tbl" id="t-kinds" hidden></div>
+</figure>
+<p>Card payments are by far the most common kind. Cash and international payments are rare: about 34 of the roughly 500 payments. Serious customers make a few more payments of <em>every</em> kind: 524 against 494 in total, or 6% more. But the mix is almost the same, so counting payments alone cannot separate the two groups.</p>
+<aside class="note"><p class="note-label">For the model</p><p>We count the payments of each kind separately, and add each kind's share of all payments.</p></aside>
+<p class="bridge">Serious customers are only a little busier. Maybe the difference is in when they pay?</p>
+</section>
+
+<!-- 3 -->
+<section id="before">
+<p class="label">3 · Before the alert</p>
+<h2>The months before an alert look the same for everyone</h2>
+<p>We followed every customer week by week through the six months before the alert.</p>
+<figure class="fig" id="f-time">
+ <div class="seg" id="b-time" role="group" aria-label="Choose what to show">
+  <button aria-pressed="true" data-v="act">Payments per day</button><button aria-pressed="false" data-v="amt">Payment size</button>
+ </div>
+ <figcaption class="fig-head" id="h-time"></figcaption>
+ <div class="legend"><span><i class="line" style="--c:var(--serious)"></i>Serious</span><span><i class="line" style="--c:var(--false)"></i>False alarm</span></div>
+ <div class="chart" id="c-time"></div>
+ <div class="fig-foot"><span>Source: competition training data. Weeks 1 to 25 before the alert; the last day is shown below.</span><button class="tbtn" data-t="t-time" aria-expanded="false">Show table</button></div>
+ <div class="tbl" id="t-time" hidden></div>
+</figure>
+<p>Two things change for everyone as the alert gets closer. Customers pay <strong>less often</strong>: about 3 payments a day five months before, about 1 a day in the last week. And their payments get <strong>smaller</strong>. Serious customers follow the same path. They are simply 3–8% busier in every single week: a steady difference, not a sudden change before the alert.</p>
+<h3>A strange last day</h3>
+<div class="stats">
+ <div class="stat"><b>41</b><span>payments per customer in the last day before the alert</span></div>
+ <div class="stat"><b>8%</b><span>of all payments in the data fall on this one day</span></div>
+ <div class="stat"><b>97%</b><span>of these are made between 23:57 and 23:59</span></div>
+</div>
+<p>This looked important at first. But serious and false-alarm customers have almost the same number of these payments (42 and 40), so they do not help to tell them apart. We also noticed that on all other days, payments are spread perfectly evenly across the 24 hours: every hour has 4.2% of them. Both facts suggest this is how the data was prepared, not how people really behave.</p>
+<aside class="note"><p class="note-label">For the model</p>
+ <p>We describe each alert's activity in the last 7, 30, 90 and 180 days, and in each 30-day block.</p>
+ <p>We also make one important fix. Payments get smaller for everyone as the alert gets closer. So we compare each payment with the average payment made on the same day before an alert, like comparing a child's height only with children of the same age. Now "small" and "big" mean the same thing, whenever the payment was made.</p></aside>
+<p class="bridge">Timing does not separate the groups. So we looked at the last thing: how big the payments are, kind by kind.</p>
+</section>
+
+<!-- 4 -->
+<section id="sizes">
+<p class="label">4 · Payment sizes</p>
+<h2>The surprise: the smaller the transfers, the higher the risk</h2>
+<p>We expected serious customers to move larger amounts. To check, we sorted customers by the usual size of their outgoing bank transfers, split them into ten equal groups, and counted how many alerts in each group were serious.</p>
+<figure class="fig" id="f-bank">
+ <figcaption class="fig-head"><b>Share of alerts that were serious</b><span>Customers in ten equal groups, from the smallest usual outgoing bank transfer (left) to the largest (right)</span></figcaption>
+ <div class="chart" id="c-bank"></div>
+ <div class="fig-foot"><span>Source: competition training data, 13,822 customers with at least one outgoing bank transfer</span><button class="tbtn" data-t="t-bank" aria-expanded="false">Show table</button></div>
+ <div class="tbl" id="t-bank" hidden></div>
+</figure>
+<p class="pull">In the group with the smallest transfers, 23 of every 100 alerts were serious. In the group with the largest, only 12.</p>
+<p>Why could this be? Large transfers attract attention, and banks must report them. A person who wants to hide money can split one large amount into many small transfers that look normal one by one.</p>
+<p>The same comparison works for every size of payment. Choose a kind of payment to see which sizes are more common among serious customers:</p>
+<figure class="fig" id="f-size">
+ <div class="seg" id="b-size" role="group" aria-label="Choose a kind of payment"></div>
+ <figcaption class="fig-head"><b>How much more common each payment size is among serious customers</b><span>Compared with false-alarm customers, after the fix described in Section 3</span></figcaption>
+ <div class="chart" id="c-size"></div>
+ <p class="takeaway" id="k-size" aria-live="polite"></p>
+ <div class="fig-foot"><span>Source: competition training data. Size bands with enough payments in both groups.</span><button class="tbtn" data-t="t-size" aria-expanded="false">Show table</button></div>
+ <div class="tbl" id="t-size" hidden></div>
+</figure>
+<p>Put together, a typical serious customer has <strong>many small bank transfers, some large cash deposits, and card spending that jumps between very small and very large amounts</strong>. Each sign is weak alone, but they add up.</p>
+<p>We also checked classic warning signs that banks look for: money that leaves within a day of arriving, many payments of almost the same amount, and payments at night or on weekends. None of them separated the two groups, so the model mostly uses sizes.</p>
+<aside class="note"><p class="note-label">For the model</p><p>For each of the eight kinds of payments, we describe the sizes: the smallest, the middle and the largest ones, the average, the total and how much they vary, all measured after the fix from Section 3. We also compare the size of a customer's bank transfers with their own card payments. In total, every alert is described by <strong>208 clues</strong> (the model's features).</p></aside>
+<p class="bridge">Each clue is weak on its own. The model's job is to combine them.</p>
+</section>
+
+<!-- 5 -->
+<section id="model">
+<p class="label">5 · The model</p>
+<h2>A simple scorecard that learned from 14,000 decisions</h2>
+<p>Our model works like a scorecard (its technical name is <strong>logistic regression</strong>). Every clue adds or removes a few points, and the total is turned into a chance between 0% and 100%. Before scoring, each clue is measured in the same way (how far this customer is from a typical one), so no clue wins just because its numbers are big.</p>
+<p>Here is the scorecard for two real past alerts:</p>
+<figure class="fig" id="f-cards">
+ <figcaption class="fig-head"><b>How the model scores two past alerts</b><span>The chance of "serious" after each group of clues is added</span></figcaption>
+ <div class="cards" id="cards"></div>
+ <div class="fig-foot"><span>Chances from the final model, trained on all 14,000 training alerts</span></div>
+</figure>
+<p><strong>Which clues count the most?</strong> The largest cash deposits and how much a customer's card spending varies push an alert up the list. Large bank transfers push it down. This is the same story as in Section 4.</p>
+<p><strong>How did it learn the points?</strong> We gave it the 14,000 past alerts together with the specialists' decisions. It started with a guess, measured how far its chances were from the real decisions, and corrected the points again and again until they matched as closely as possible. We also told it to be careful: a clue gets many points only if the data strongly supports it. Without this care, the test score drops from 0.640 to 0.627.</p>
+<p><strong>How did we test it fairly?</strong> Like an exam with hidden questions. We split the alerts into five groups, taught the model on four and tested it on the fifth, which it had never seen. We did this five times, so every alert was tested once. With six different random splits, the score stayed between 0.640 and 0.643, so the result is stable.</p>
+<figure class="fig" id="f-ladder">
+ <figcaption class="fig-head"><b>Each finding made the model better</b><span>Test score (ROC-AUC) on alerts the model had not seen. 0.50 means guessing, 1.00 is perfect.</span></figcaption>
+ <div class="chart" id="c-ladder"></div>
+ <div class="fig-foot"><span>Tested on hidden alerts (5-fold cross-validation), same split for every row</span><button class="tbtn" data-t="t-ladder" aria-expanded="false">Show table</button></div>
+ <div class="tbl" id="t-ladder" hidden></div>
+</figure>
+<p><strong>What does 0.640 mean?</strong> Take one serious alert and one false alarm at random. Our model puts the serious one higher 64 times out of 100; guessing would do it 50 times. That sounds modest, but the researchers who designed this kind of data reported 0.641 for their best model.</p>
+<p><strong>Why a simple model?</strong> We also tried boosted trees, a more complex model that many teams use. With the same 208 clues, its best version scored 0.633. The differences between serious and false-alarm customers are small, and a complex model starts to learn accidents that do not repeat in new data. The simpler we made the trees, the better they scored, but they never beat the simple model.</p>
+<p class="bridge">A score of 0.640 is still abstract. Here is what it means for a team with limited time.</p>
+</section>
+
+<!-- 6 -->
+<section id="result">
+<p class="label">6 · The result</p>
+<h2>Same work, more serious cases found</h2>
+<div class="example">
+ <p class="example-label">A simple example</p>
+ <p>A doctor has <strong>100 patients</strong> waiting. <strong>17</strong> of them are seriously ill, but nobody knows which. There is time to see only <strong>30</strong> today.</p>
+ <div class="ex-two">
+  <div><b>Without a nurse</b>The doctor sees patients in the order they arrived. About <strong>5</strong> of the 30 are seriously ill.</div>
+  <div><b>With a nurse</b>A nurse looks at everyone first and sends the sickest-looking patients in first. Now about <strong>8</strong> of the 30 are seriously ill.</div>
+ </div>
+ <p>The nurse is sometimes wrong, but the doctor sees more sick patients in the same time. In our case, <strong>the patients are alerts, the doctor is the bank's specialist, and the nurse is our model.</strong></p>
+</div>
+<p>Here is the same idea with our real results. Take the 100 alerts from Section 1 and choose how many the team can check. The team checks the squares row by row, starting at the top.</p>
+<figure class="fig" id="f-review">
+ <div class="review-top"><span class="rt-label">Alerts the team can check:</span><div class="seg nums" id="b-k" role="group" aria-label="Alerts the team can check"></div></div>
+ <div class="q2">
+  <div><p class="q-cap"><b>Without our model</b>Checked in the order they arrive</p><div class="wwrap"><div class="waffle" id="w-rand" aria-hidden="true"></div><div class="cut" id="cut-rand" aria-hidden="true"></div></div><p class="q-found"><b id="n-rand">5</b>of 17 serious found</p></div>
+  <div><p class="q-cap"><b>With our model</b>Highest chance of "serious" checked first</p><div class="wwrap"><div class="waffle" id="w-ours" aria-hidden="true"></div><div class="cut" id="cut-ours" aria-hidden="true"></div></div><p class="q-found"><b id="n-ours">8</b>of 17 serious found</p></div>
+ </div>
+ <div class="legend" style="margin-top:.9rem"><span><i style="--c:var(--serious)"></i>Serious</span><span><i style="--c:#C3C9CF"></i>False alarm</span><span><i class="line" style="--c:var(--ink)"></i>Time runs out</span><span>Faded: not checked</span></div>
+ <p class="result" id="r-text" aria-live="polite"></p>
+ <div class="fig-foot"><span>Real results on the 14,000 training alerts, shown as 100 alerts. Each alert was scored by a model that had not seen it.</span><button class="tbtn" data-t="t-review" aria-expanded="false">Show table</button></div>
+ <div class="tbl" id="t-review" hidden></div>
+</figure>
+<p>If the team could check all 100 alerts, both ways would find all 17. The order matters only when time is short, and in a real bank it always is.</p>
+<p>Across all 14,000 past alerts, the first tenth of our queue had <strong>29%</strong> serious alerts, and the last tenth only <strong>9%</strong>. Like the nurse, the model is sometimes wrong, but it moves most serious alerts toward the front.</p>
+</section>
+
+<!-- conclusion -->
+<section id="conclusion">
+<p class="label">Conclusion</p>
+<h2>What we learned</h2>
+<ul class="plain">
+ <li><strong>The difference is small but steady.</strong> Serious and false-alarm customers pay at the same times and almost as often. What differs is the size of their payments: smaller bank transfers, larger cash deposits and more uneven card spending, through all six months.</li>
+ <li><strong>Two decisions mattered most.</strong> Describing each kind of payment separately, and comparing sizes fairly after removing the common change before the alert, raised our score from 0.562 to 0.640.</li>
+ <li><strong>Simple beat complex.</strong> A careful scorecard model did better than boosted trees and matches the best published result for this kind of data.</li>
+ <li><strong>It helps in practice.</strong> With the same work, a team that checks alerts in our order finds more serious cases.</li>
+</ul>
+<h3>What we would do next</h3>
+<p>Our model sees only payments. A real bank also knows who the customer is and what they do, and the same behavior can mean different things: many small payments from different people are normal for a freelancer but unusual for a student. Adding a little of this context could make the model much better, as long as it is used carefully and legally, and people are judged by what they do, never by who they are.</p>
+</section>
+
+<section id="details">
+<p class="label">For the curious</p>
+<h2 style="font-size:1.6rem">Technical details for reviewers</h2>
+<p class="det-intro">The same work as above, in technical terms: the data checks, the exact method, how we tested it and how to reproduce our submission. <button class="tbtn" id="xall" aria-expanded="false">Open all</button></p>
+
+<h3 class="grp">Data</h3>
+<details><summary>Data checks</summary><div class="inner">
+ <div class="tbl"><table><thead><tr><th>Check</th><th class="n">Result</th></tr></thead><tbody>
+  <tr><td>Training alerts</td><td class="n">14,000 (2,405 serious, 17.2%)</td></tr>
+  <tr><td>Test alerts</td><td class="n">6,000</td></tr>
+  <tr><td>Payments for training / test alerts</td><td class="n">6,987,663 / 3,027,575</td></tr>
+  <tr><td>Payments per alert</td><td class="n">mean 499, median 461, min 1, max 2,279</td></tr>
+  <tr><td>Alert dates (training and test)</td><td class="n">2025-01-01 to 2026-12-31</td></tr>
+  <tr><td>History per alert</td><td class="n">180 days before the alert date</td></tr>
+  <tr><td>Missing values in all four files</td><td class="n">0</td></tr>
+  <tr><td>Repeated alert IDs</td><td class="n">0</td></tr>
+  <tr><td>Alerts or payments shared by training and test</td><td class="n">0</td></tr>
+ </tbody></table></div>
+ <p>Share of serious alerts by quarter (training data):</p>
+ <div class="tbl" id="t-quarters"></div>
+</div></details>
+<details><summary>Notes on the data</summary><div class="inner">
+ <ul class="plain">
+  <li>The organizers state that the data is synthetic (computer-made) and contains no real customer records.</li>
+  <li><strong>The last day.</strong> 8.1% of all payments (40.7 per alert) fall in the last day before the alert date, and 96.6% of these are stamped 23:57 to 23:59. Serious alerts have 42.0 of them, false alarms 40.4 (single-clue ROC-AUC 0.515). On every other day the 24 hours are equally used (4.15% to 4.18% of payments per hour). We treat both as side effects of how the data was generated.</li>
+  <li><strong>Direction labels.</strong> "Card, in" (<code>karta</code>, <code>kirim</code>) is the most common kind, about 204 payments per customer, which is unusual if <em>kirim</em> means money coming in. In SynthAML the matching label marks payments that lower the balance. We use the labels as given; the model does not depend on their meaning.</li>
+  <li><strong>Sizes</strong> are a standard index (<code>miqdor_indeksi</code>), not money amounts, so we only compare sizes with each other.</li>
+  <li>178 training customers have no outgoing bank transfers (14.6% of them serious). They are not part of the chart in Section 4.</li>
+ </ul>
+</div></details>
+
+<h3 class="grp">Method</h3>
+<details><summary>Pipeline at a glance</summary><div class="inner">
+ <ol class="plain">
+  <li>Load the alert files (CSV) and payment files (Parquet) with pandas and pyarrow.</li>
+  <li>Build 113 clues from each alert's own 180-day history: counts and sizes per kind of payment, 30-day blocks, the last 7/30/90/180 days, time between payments and more.</li>
+  <li>Learn the average payment size for each day before the alert (0 to 180) from training payments only, and subtract it from every payment (the "fix" from Section 3).</li>
+  <li>Build 95 size-profile clues per kind of payment from the corrected sizes.</li>
+  <li>Model: median imputation → standardization → logistic regression (L2, C = 0.002), all in one scikit-learn pipeline.</li>
+  <li>Test with 5-fold stratified cross-validation (seed 42).</li>
+  <li>Fit on all 14,000 training alerts and predict the 6,000 test alerts.</li>
+  <li>Check the file (6,000 rows, one per test ID, no repeats, all values between 0 and 1) and save <code>team_1B8F4334.csv</code>.</li>
+ </ol>
+</div></details>
+<details><summary>All 208 clues</summary><div class="inner">
+ <div class="tbl"><table><thead><tr><th>Group</th><th class="n">Clues</th><th>Examples</th></tr></thead><tbody>
+  <tr><td>Per kind of payment: count, average size, largest size, spread</td><td class="n">32</td><td><code>n_naqd_kirim</code>, <code>std_karta_chiqim</code></td></tr>
+  <tr><td>Each 30-day block: count, average size, outgoing count</td><td class="n">18</td><td><code>cnt_b0</code>, <code>amt_b2</code></td></tr>
+  <tr><td>Last 7/30/90/180 days: count, size (average, spread, largest), share outgoing, share at night, large payments, share of each type; recent vs full history</td><td class="n">50</td><td><code>n_30</code>, <code>night_7</code>, <code>rate_ratio_30</code></td></tr>
+  <tr><td>All payments: size levels (10/50/90/99%), time between payments (4), money out within 24 hours of money in, activity trend, total count, alert month and weekday</td><td class="n">13</td><td><code>q0.9</code>, <code>gap_med</code>, <code>pt_share</code></td></tr>
+  <tr><td>Corrected sizes per kind: 10/25/50/75/90% levels, average, total, and count and average for the last 30 and 90 days</td><td class="n">88</td><td><code>p_dq90_naqd_kirim</code></td></tr>
+  <tr><td>Bank-transfer extras: share of very large and very small transfers, number of transfers, bank vs card size; overall level and spread</td><td class="n">7</td><td><code>p_bank_lo</code>, <code>p_rel_bank_card</code></td></tr>
+  <tr><td><strong>Total</strong></td><td class="n"><strong>208</strong></td><td></td></tr>
+ </tbody></table></div>
+</div></details>
+<details><summary>Model settings and how we chose them</summary><div class="inner">
+ <p>Logistic regression (scikit-learn, lbfgs solver, L2 penalty, no class weights, since ROC-AUC depends only on the order). Missing values (for example, a customer with no cash payments) are filled with the median, and every clue is standardized.</p>
+ <p>The most important setting is <strong>C</strong>, which controls how careful the model is: a smaller C keeps the points small unless the data strongly supports them. Cross-validated ROC-AUC for each value:</p>
+ <div class="tbl"><table><thead><tr><th>C</th><th class="n">ROC-AUC</th></tr></thead><tbody>
+  <tr><td>0.0005</td><td class="n">0.6385</td></tr><tr><td>0.001</td><td class="n">0.6401</td></tr><tr class="ours"><td>0.002 (used)</td><td class="n">0.6398</td></tr><tr><td>0.005</td><td class="n">0.6382</td></tr><tr><td>0.01</td><td class="n">0.6362</td></tr><tr><td>0.05</td><td class="n">0.6318</td></tr><tr><td>1.0</td><td class="n">0.6269</td></tr>
+ </tbody></table></div>
+ <p>The score rises as the model becomes more careful, up to C ≈ 0.001–0.002 (equal within noise), then falls again.</p>
+</div></details>
+<details><summary>How we avoided leaking answers</summary><div class="inner">
+ <ul class="plain">
+  <li>The size correction uses no labels, and it is learned from training payments only, then applied to the test payments.</li>
+  <li>Every clue for an alert comes only from that alert's own payments. Training and test share no alerts and no payments.</li>
+  <li>Imputation and standardization are fitted inside each cross-validation fold (one scikit-learn pipeline), so the held-out fold never influences them.</li>
+  <li>All choices were made with cross-validation on the training data. The test data was used once, for the final predictions.</li>
+  <li>No outside data or labels were used. The SynthAML paper was read only to understand the data.</li>
+ </ul>
+</div></details>
+
+<h3 class="grp">Results</h3>
+<details><summary>Validation and stability</summary><div class="inner">
+ <p>Scores on each held-out fold (seed 42). The overall score is computed on all held-out predictions together.</p>
+ <div class="tbl"><table><thead><tr><th>Fold</th><th class="n">1</th><th class="n">2</th><th class="n">3</th><th class="n">4</th><th class="n">5</th><th class="n">Overall</th></tr></thead><tbody>
+  <tr><td>ROC-AUC</td><td class="n">0.658</td><td class="n">0.617</td><td class="n">0.627</td><td class="n">0.656</td><td class="n">0.641</td><td class="n"><strong>0.640</strong></td></tr></tbody></table></div>
+ <p>Single folds vary more because each has only 2,800 alerts. With six different random splits, the overall score stays between 0.640 and 0.643:</p>
+ <div class="tbl"><table><thead><tr><th>Split seed</th><th class="n">42</th><th class="n">0</th><th class="n">1</th><th class="n">2</th><th class="n">3</th><th class="n">4</th></tr></thead><tbody>
+  <tr><td>ROC-AUC</td><td class="n">0.6398</td><td class="n">0.6402</td><td class="n">0.6427</td><td class="n">0.6409</td><td class="n">0.6430</td><td class="n">0.6419</td></tr></tbody></table></div>
+</div></details>
+<details><summary>Models compared</summary><div class="inner">
+ <p>All rows use the same five folds (seed 42).</p>
+ <div class="tbl"><table><thead><tr><th>Model</th><th class="n">Clues</th><th class="n">ROC-AUC</th></tr></thead><tbody>
+  <tr><td>Logistic regression, all payments mixed together</td><td class="n">65</td><td class="n">0.562</td></tr>
+  <tr><td>Logistic regression, each kind of payment separately</td><td class="n">113</td><td class="n">0.634</td></tr>
+  <tr class="ours"><td>Logistic regression, + corrected size profiles (final)</td><td class="n">208</td><td class="n">0.640</td></tr>
+  <tr><td>Boosted trees: learning rate 0.03, 500 trees, 15 leaves, at least 80 alerts per leaf, L2 1</td><td class="n">208</td><td class="n">0.616</td></tr>
+  <tr><td>Boosted trees: learning rate 0.05, 250 trees, depth 3, at least 300 per leaf, L2 10, 50% of clues per split</td><td class="n">208</td><td class="n">0.627</td></tr>
+  <tr><td>Boosted trees: learning rate 0.02, 700 trees, 7 leaves, at least 200 per leaf, L2 5, 30% of clues per split</td><td class="n">208</td><td class="n">0.632</td></tr>
+  <tr><td>Boosted trees: learning rate 0.01, 1,200 trees, 5 leaves, at least 300 per leaf, L2 10, 20% of clues per split</td><td class="n">208</td><td class="n">0.633</td></tr>
+ </tbody></table></div>
+ <p>Boosted trees are scikit-learn's HistGradientBoostingClassifier. The simpler the trees, the better they scored, but none reached the logistic regression.</p>
+</div></details>
+<details><summary>The model's strongest clues</summary><div class="inner">
+ <p>The ten clues with the largest weights in the final model. All clues are standardized, so the weights can be compared.</p>
+ <div class="legend"><span><i style="--c:var(--serious)"></i>Higher value → more likely serious</span><span><i style="--c:var(--false)"></i>Higher value → more likely a false alarm</span></div>
+ <div class="chart" id="c-weights"></div>
+</div></details>
+<details><summary>How well the model sorts alerts</summary><div class="inner">
+ <p>The 14,000 training alerts sorted by their held-out score and split into ten equal groups of 1,400. If the model were useless, every group would have about 17% serious alerts.</p>
+ <div class="chart" id="c-deciles"></div>
+</div></details>
+<details><summary>Comparison with published research</summary><div class="inner">
+ <p>The structure of this data closely matches <a href="https://www.nature.com/articles/s41597-023-02569-2">SynthAML</a>, a computer-made dataset built from a Danish bank's records (Jensen et al., 2023, <em>Scientific Data</em>). Its authors report these results for the same task:</p>
+ <div class="tbl"><table><thead><tr><th>Model</th><th class="n">ROC-AUC</th></tr></thead><tbody>
+  <tr><td>Decision tree</td><td class="n">0.520</td></tr><tr><td>Support vector machine</td><td class="n">0.563</td></tr><tr><td>Neural network</td><td class="n">0.573</td></tr><tr><td>Random forest</td><td class="n">0.626</td></tr><tr><td>LightGBM</td><td class="n">0.637</td></tr><tr><td>Logistic regression</td><td class="n">0.641</td></tr>
+  <tr class="ours"><td>Our model, on the competition data</td><td class="n">0.640</td></tr></tbody></table></div>
+ <p>Their 56-clue recipe scores 0.629 on the competition data, so our clues add a real improvement. On the real bank data they report about 0.75, which suggests that computer-made data like this limits what any model can reach.</p>
+</div></details>
+<details><summary>What we tried that did not help</summary><div class="inner">
+ <p>Each of these separated the groups only a little on its own (single-clue ROC-AUC 0.50 to 0.54) and added nothing once the size clues were in the model:</p>
+ <ul class="plain">
+  <li>money going out within 1 to 24 hours after it comes in;</li>
+  <li>repeated, almost identical amounts and long runs of transfers;</li>
+  <li>night-time and weekend activity (expected, since the time of day is spread evenly in this data);</li>
+  <li>bursts of activity, including the last-day payments (single-clue ROC-AUC 0.515).</li>
+ </ul>
+ <p>We also tried automatic clue selection (elastic net), a separate size correction for each kind of payment, a score for every single payment, and mixes of boosted trees with logistic regression. None improved the score by more than the noise between runs (about ±0.002), so we kept the simplest version.</p>
+</div></details>
+<details><summary>Limitations</summary><div class="inner">
+ <ul class="plain">
+  <li>The data is computer-made. For the matching SynthAML data, models reach about 0.75 on the real bank records but about 0.64 on the synthetic version, so a ceiling near 0.64 is likely here too.</li>
+  <li>The differences between the groups are small. The model improves the order but gives no certainty: even in the top tenth of our queue, 71% of alerts are false alarms.</li>
+  <li>If <em>kirim</em> and <em>chiqim</em> are reversed, our plain-language "in" and "out" descriptions would swap, but the model and its score would not change.</li>
+  <li>The last-day payments look like a side effect of how the data was made; a real system would need to check how alerts are triggered.</li>
+  <li>A logistic regression does not model combinations of clues. Boosted trees, which can, did not do better on this data.</li>
+ </ul>
+</div></details>
+
+<h3 class="grp">Reproducibility</h3>
+<details><summary>How to reproduce our submission</summary><div class="inner">
+ <ol class="plain">
+  <li>Open <code>team_1B8F4334.ipynb</code> in Google Colab or Jupyter (Python 3 with pandas, numpy, scikit-learn and pyarrow).</li>
+  <li>Put <code>fintech_track_data.zip</code> next to the notebook. The first cell unzips it.</li>
+  <li>Run all cells. It takes a few minutes and prints the cross-validation score (0.6398).</li>
+  <li>The last cell checks the competition rules and writes <code>team_1B8F4334.csv</code> with 6,000 rows.</li>
+ </ol>
+ <p>The random seed is fixed (42). We ran the notebook again from scratch in Google Colab and got the same predictions (differences below 10<sup>−14</sup>) and exactly the same ranking.</p>
+</div></details>
+</section>
+
+<footer>Team Ufq · Team ID 1B8F4334 · WIUT Inter-University Hackathon 2026, FinTech / AI in Finance track. All numbers are computed from the official competition training data. The model and its score come from our submitted notebook. No external data or labels were used.</footer>
+</div>
+
+<script>
+const D = {"n":14000,"nE":2405,"rate":0.17179,"mix":{"bank_otkazmasi_chiqim":{"E":53.78711,"D":50.01268,"all":50.66107},"bank_otkazmasi_kirim":{"E":152.22079,"D":144.8332,"all":146.10229},"karta_chiqim":{"E":66.56008,"D":61.73954,"all":62.56764},"karta_kirim":{"E":214.69272,"D":204.0978,"all":205.91786},"naqd_chiqim":{"E":8.45946,"D":7.5705,"all":7.72321},"naqd_kirim":{"E":25.59127,"D":23.51652,"all":23.87293},"xalqaro_chiqim":{"E":0.59626,"D":0.51936,"all":0.53257},"xalqaro_kirim":{"E":1.86237,"D":1.71608,"all":1.74121}},"tx_per_E":523.77006,"tx_per_D":494.00569,"weeks":[{"wk":0,"actE":1.08868,"amtE":-0.43862,"actD":1.04769,"amtD":-0.36002},{"wk":1,"actE":1.2373,"amtE":-0.41884,"actD":1.20106,"amtD":-0.34437},{"wk":2,"actE":1.42602,"amtE":-0.38835,"actD":1.35678,"amtD":-0.32343},{"wk":3,"actE":1.61942,"amtE":-0.36782,"actD":1.53151,"amtD":-0.3065},{"wk":4,"actE":1.80992,"amtE":-0.34129,"actD":1.69223,"amtD":-0.27595},{"wk":5,"actE":2.0253,"amtE":-0.30382,"actD":1.86922,"amtD":-0.25461},{"wk":6,"actE":2.20903,"amtE":-0.28303,"actD":2.04985,"amtD":-0.2311},{"wk":7,"actE":2.37541,"amtE":-0.27163,"actD":2.22494,"amtD":-0.21481},{"wk":8,"actE":2.56994,"amtE":-0.24182,"actD":2.37492,"amtD":-0.19222},{"wk":9,"actE":2.72878,"amtE":-0.22552,"actD":2.5278,"amtD":-0.1694},{"wk":10,"actE":2.85334,"amtE":-0.19936,"actD":2.66202,"amtD":-0.15235},{"wk":11,"actE":3.01348,"amtE":-0.18837,"actD":2.79783,"amtD":-0.13505},{"wk":12,"actE":3.09605,"amtE":-0.16818,"actD":2.90397,"amtD":-0.11237},{"wk":13,"actE":3.19489,"amtE":-0.14884,"actD":2.98555,"amtD":-0.09665},{"wk":14,"actE":3.29421,"amtE":-0.13154,"actD":3.06104,"amtD":-0.0816},{"wk":15,"actE":3.31078,"amtE":-0.12691,"actD":3.12053,"amtD":-0.06392},{"wk":16,"actE":3.34102,"amtE":-0.10012,"actD":3.15833,"amtD":-0.04769},{"wk":17,"actE":3.36668,"amtE":-0.08984,"actD":3.17938,"amtD":-0.02893},{"wk":18,"actE":3.36014,"amtE":-0.0777,"actD":3.18987,"amtD":-0.01608},{"wk":19,"actE":3.33573,"amtE":-0.0712,"actD":3.16446,"amtD":0.00157},{"wk":20,"actE":3.30639,"amtE":-0.04656,"actD":3.14548,"amtD":0.01672},{"wk":21,"actE":3.27894,"amtE":-0.03738,"actD":3.10253,"amtD":0.02825},{"wk":22,"actE":3.21117,"amtE":-0.01859,"actD":3.04815,"amtD":0.04537},{"wk":23,"actE":3.11435,"amtE":-0.00833,"actD":2.98406,"amtD":0.05708},{"wk":24,"actE":3.04407,"amtE":0.01222,"actD":2.90804,"amtD":0.07051}],"bankdec":[[0.22777,1383,315],[0.22142,1382,306],[0.19682,1382,272],[0.19465,1382,269],[0.16932,1382,234],[0.16787,1382,232],[0.14834,1382,205],[0.15051,1382,208],[0.12518,1382,173],[0.11931,1383,165]],"pc_counts":{"bank":39,"cash":34,"card":34,"other":101},"examples":[{"id":"SG_011393","label":1,"p":0.29556,"oof":0.29961,"rank_pct":0.95543,"steps":[["start",0.16045],["bank",0.20484],["cash",0.23616],["card",0.28684],["other",0.29556]],"contrib":{"bank":0.29859,"cash":0.18245,"card":0.26306,"other":0.04227}},{"id":"SG_008797","label":0,"p":0.07282,"oof":0.07814,"rank_pct":0.04686,"steps":[["start",0.16045],["bank",0.10198],["cash",0.08277],["card",0.08813],["other",0.07282]],"contrib":{"bank":-0.52048,"cash":-0.22993,"card":0.06865,"other":-0.20755}}],"ladder":[["mixed",0.56151,65],["by_kind",0.63383,113],["final",0.63985,208]],"trees":0.6328,"trees_all":{"A":0.6163,"B":0.6315,"C":0.6273,"D":0.6328},"grid_rand":[0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],"grid_ours":[0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],"per100_ours":[0.0,0.25,0.56429,0.83571,1.14286,1.42143,1.72143,1.92143,2.22857,2.51429,2.87143,3.10714,3.39286,3.75714,4.1,4.36429,4.59286,4.75714,5.10714,5.42143,5.71429,5.97857,6.25,6.44286,6.72143,6.90714,7.15714,7.43571,7.67857,7.9,8.16429,8.35,8.54286,8.75714,8.97143,9.17857,9.37857,9.57143,9.77857,9.97143,10.15714,10.28571,10.42143,10.62857,10.8,10.95,11.10714,11.24286,11.40714,11.51429,11.63571,11.76429,11.88571,12.06429,12.17857,12.30714,12.41429,12.59286,12.72857,12.85714,12.99286,13.12857,13.26429,13.4,13.52143,13.62857,13.73571,13.85714,13.98571,14.09286,14.21429,14.30714,14.40714,14.49286,14.61429,14.70714,14.78571,14.87143,14.97857,15.05714,15.14286,15.25714,15.36429,15.47857,15.60714,15.71429,15.8,15.91429,16.01429,16.12143,16.3,16.41429,16.49286,16.57857,16.67143,16.72857,16.78571,16.89286,16.97857,17.07857,17.17857],"scoredec":[0.08786,0.11571,0.09286,0.12214,0.13571,0.14786,0.19929,0.245,0.28429,0.28714],"weights":[["p_dq90_naqd_kirim",0.08052],["max_naqd_kirim",0.07817],["std_bank_otkazmasi_kirim",-0.06979],["std_karta_chiqim",0.06858],["p_dsum_naqd_kirim",0.06261],["p_dsum_karta_chiqim",0.05963],["p_dq90_bank_otkazmasi_kirim",-0.05682],["p_dmean_naqd_kirim",0.05679],["p_dq90_bank_otkazmasi_chiqim",-0.05677],["p_dq75_naqd_kirim",0.05491]],"quarters":[["2025Q1",0.17747,1527],["2025Q2",0.16888,1433],["2025Q3",0.15802,2177],["2025Q4",0.16728,2451],["2026Q1",0.17519,2249],["2026Q2",0.17475,1877],["2026Q3",0.17647,1241],["2026Q4",0.18852,1045]],"ratio":{"bank_otkazmasi_chiqim":[[-2.375,1.05357,587,2496],[-2.125,1.17383,823,3141],[-1.875,1.09551,1287,5263],[-1.625,1.12621,2124,8449],[-1.375,1.18732,3368,12708],[-1.125,1.14298,4871,19092],[-0.875,1.14987,6733,26232],[-0.625,1.1342,8674,34261],[-0.375,1.12743,10525,41822],[-0.125,1.11382,11978,48177],[0.125,1.0695,12442,52117],[0.375,1.01003,11880,52693],[0.625,0.99113,11196,50606],[0.875,0.95288,9745,45816],[1.125,0.93225,8344,40097],[1.375,0.87873,6567,33480],[1.625,0.85016,5091,26827],[1.875,0.80513,3768,20966],[2.125,0.78473,2789,15922],[2.375,0.80067,2085,11666],[2.625,0.7271,1351,8324],[2.875,0.72952,958,5883],[3.125,0.7281,654,4024]],"bank_otkazmasi_kirim":[[-2.375,1.11073,2444,10091],[-2.125,1.11595,3368,13841],[-1.875,1.15831,5649,22366],[-1.625,1.15677,8801,34892],[-1.375,1.15526,12959,51444],[-1.125,1.12717,18060,73480],[-0.875,1.10635,23460,97247],[-0.625,1.08386,28885,122220],[-0.375,1.07044,33161,142072],[-0.125,1.04494,35309,154965],[0.125,1.01988,35204,158301],[0.375,1.00008,32917,150948],[0.625,0.96555,28999,137736],[0.875,0.9386,24595,120173],[1.125,0.91415,19670,98680],[1.375,0.87962,15029,78357],[1.625,0.85707,11261,60256],[1.875,0.8203,7922,44290],[2.125,0.80236,5608,32054],[2.375,0.76596,3789,22686],[2.625,0.75882,2562,15484],[2.875,0.7449,1698,10454]],"naqd_kirim":[[-0.875,0.90077,723,3556],[-0.625,0.97668,2173,9857],[-0.375,0.99194,4222,18857],[-0.125,0.98372,6280,28283],[0.125,1.00714,7941,34932],[0.375,1.00858,8307,36490],[0.625,0.9859,7824,35159],[0.875,0.98485,6826,30707],[1.125,0.99624,5567,24757],[1.375,1.00202,4212,18623],[1.625,1.02034,2903,12605],[1.875,1.08398,1951,7974],[2.125,1.04336,1137,4828],[2.375,1.03657,613,2620],[2.625,1.17574,358,1349]],"karta_chiqim":[[-1.875,1.1344,1124,4431],[-1.625,1.10362,2244,9093],[-1.375,1.05762,3849,16275],[-1.125,1.04443,6803,29129],[-0.875,1.03543,10887,47021],[-0.625,0.99167,14964,67481],[-0.375,0.98353,18403,83677],[-0.125,0.98038,20218,92225],[0.125,0.98597,19593,88867],[0.375,0.97978,17064,77885],[0.625,0.99938,13850,61976],[0.875,0.99102,10214,46091],[1.125,0.99657,7218,32390],[1.375,0.9928,4845,21824],[1.625,1.03296,3222,13949],[1.875,1.01657,2012,8851],[2.125,1.03718,1264,5450],[2.375,1.06175,755,3180]]}};
+const C = {s:'#2A4FA8', f:'#848E98', o:'#1E9E9A', grid:'#E6E9EC', axis:'#AEB6BE', ink:'#16202B', ink2:'#3C4753', muted:'#66717C', light:'#C3C9CF'};
+const KIND = {karta_kirim:'Card, in', karta_chiqim:'Card, out', bank_otkazmasi_kirim:'Bank transfer, in', bank_otkazmasi_chiqim:'Bank transfer, out', naqd_kirim:'Cash, in', naqd_chiqim:'Cash, out', xalqaro_kirim:'International, in', xalqaro_chiqim:'International, out'};
+const NS = 'http://www.w3.org/2000/svg';
+const fmt = (x, d = 0) => x.toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+const pct = (x, d = 0) => fmt(x * 100, d) + '%';
+function el(tag, a, p) { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+function txt(p, x, y, s, a = {}) { const t = el('text', Object.assign({x, y}, a), p); t.textContent = s; return t; }
+function setup(id, h, label) {
+  const box = document.getElementById(id); box.innerHTML = '';
+  const W = Math.max(280, box.clientWidth);
+  const svg = el('svg', {viewBox: `0 0 ${W} ${h}`, height: h, role: 'img', 'aria-label': label || ''}, box);
+  const tip = document.createElement('div'); tip.className = 'tip'; box.appendChild(tip);
+  const show = (x, y, html) => { tip.innerHTML = html; const tw = tip.offsetWidth; const cx = Math.min(Math.max(x, tw / 2 + 2), W - tw / 2 - 2); tip.style.left = cx + 'px'; tip.style.top = y + 'px'; tip.classList.add('on'); };
+  const hide = () => tip.classList.remove('on');
+  return {box, svg, W, H: h, show, hide};
+}
+function ticks(lo, hi, n = 4) { const step = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(step))); const s = [1, 2, 2.5, 5, 10].map(m => m * mag).find(m => m >= step); const a = []; for (let v = Math.ceil(lo / s - 1e-9) * s; v <= hi + 1e-9; v += s) a.push(+v.toFixed(6)); return a; }
+// bar with a 4px rounded data end, square at the baseline
+function hbar(g, x0, y, w, h, fill, r = 4) { r = Math.min(r, w, h / 2); el('path', {d: `M${x0},${y}H${x0 + w - r}Q${x0 + w},${y} ${x0 + w},${y + r}V${y + h - r}Q${x0 + w},${y + h} ${x0 + w - r},${y + h}H${x0}Z`, fill}, g); }
+function vbar(g, x, y0, w, h, fill, r = 4) { // h>0 grows up from y0, h<0 grows down
+  const a = Math.abs(h); r = Math.min(r, a, w / 2);
+  if (h >= 0) el('path', {d: `M${x},${y0}V${y0 - a + r}Q${x},${y0 - a} ${x + r},${y0 - a}H${x + w - r}Q${x + w},${y0 - a} ${x + w},${y0 - a + r}V${y0}Z`, fill}, g);
+  else el('path', {d: `M${x},${y0}V${y0 + a - r}Q${x},${y0 + a} ${x + r},${y0 + a}H${x + w - r}Q${x + w},${y0 + a} ${x + w},${y0 + a - r}V${y0}Z`, fill}, g);
+}
+function hover(node, on, off) {
+  node.setAttribute('tabindex', '0');
+  node.addEventListener('pointerenter', on); node.addEventListener('pointerdown', on);
+  node.addEventListener('focus', on); node.addEventListener('pointerleave', off); node.addEventListener('blur', off);
+}
+function table(id, head, rows, numCols = []) {
+  const t = document.getElementById(id);
+  const h = '<table><thead><tr>' + head.map((c, i) => `<th${i && numCols.includes(i) ? ' class="n"' : ''}>${c}</th>`).join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' + r.map((c, i) => `<td${numCols.includes(i) ? ' class="n"' : ''}>${c}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+  t.innerHTML = h;
+}
+document.querySelectorAll('.tbtn[data-t]').forEach(b => b.addEventListener('click', () => {
+  const t = document.getElementById(b.dataset.t); const open = t.hidden; t.hidden = !open;
+  b.setAttribute('aria-expanded', open); b.textContent = open ? 'Hide table' : 'Show table';
+}));
+
+/* ---------- 1. target waffle ---------- */
+(function () {
+  const w = document.getElementById('w-target');
+  for (let i = 0; i < 100; i++) { const s = document.createElement('i'); s.className = i < 17 ? 's' : 'f'; w.appendChild(s); }
+  table('t-target', ['Decision', 'Alerts', 'Share'], [['Serious (escalated)', fmt(D.nE), pct(D.nE / D.n, 1)], ['False alarm (dismissed)', fmt(D.n - D.nE), pct(1 - D.nE / D.n, 1)], ['Total', fmt(D.n), '100%']], [1, 2]);
+})();
+
+/* ---------- 2. kinds ---------- */
+const KIND_ORDER = ['karta_kirim', 'karta_chiqim', 'bank_otkazmasi_kirim', 'bank_otkazmasi_chiqim', 'naqd_kirim', 'naqd_chiqim', 'xalqaro_kirim', 'xalqaro_chiqim'];
+function drawKinds() {
+  const box = document.getElementById('c-kinds'); const narrow = box.clientWidth < 520;
+  const rh = 36, m = {l: narrow ? 118 : 150, r: 50, t: 4, b: 24}; const H = m.t + m.b + KIND_ORDER.length * rh;
+  const {svg, W, show, hide} = setup('c-kinds', H, 'Average payments per customer by kind, serious versus false alarm');
+  const g = el('g', {}, svg); const mx = 250, x = v => m.l + v / mx * (W - m.l - m.r);
+  [0, 50, 100, 150, 200, 250].forEach(v => { if (narrow && v % 100 && v) return; el('line', {x1: x(v), x2: x(v), y1: m.t, y2: H - m.b, stroke: C.grid}, g); txt(g, x(v), H - 6, fmt(v), {'text-anchor': 'middle'}); });
+  KIND_ORDER.forEach((k, i) => {
+    const v = D.mix[k], y = m.t + i * rh, row = el('g', {class: 'hit'}, g);
+    const bg = el('rect', {x: 0, y, width: W, height: rh, fill: 'transparent'}, row);
+    if (i % 2 === 0 && i) el('line', {x1: 0, x2: W, y1: y, y2: y, stroke: C.grid}, g);
+    txt(row, m.l - 10, y + rh / 2 + 4, KIND[k], {'text-anchor': 'end', class: 't-ink', 'font-size': narrow ? 12 : 13});
+    hbar(row, x(0), y + 8, Math.max(1.5, x(v.E) - x(0)), 9, C.s);
+    hbar(row, x(0), y + 19, Math.max(1.5, x(v.D) - x(0)), 9, C.f);
+    const d = v.E / v.D - 1;
+    txt(row, W - 2, y + rh / 2 + 4, (d >= 0 ? '+' : '−') + fmt(Math.abs(d) * 100) + '%', {'text-anchor': 'end', class: 't-ink2', 'font-weight': 600});
+    hover(row, () => { bg.setAttribute('fill', '#F2F4F6'); show(Math.min(x(v.E), W - 120), y + 6, `<b>${fmt(v.E, 1)}</b> <span class="m">serious</span> · <b>${fmt(v.D, 1)}</b> <span class="m">false alarm</span><br>${KIND[k]}: payments per customer (${d >= 0 ? '+' : '−'}${fmt(Math.abs(d) * 100, 1)}%)`); }, () => { bg.setAttribute('fill', 'transparent'); hide(); });
+  });
+}
+table('t-kinds', ['Kind of payment', 'Serious', 'False alarm', 'Difference'], KIND_ORDER.map(k => { const v = D.mix[k]; return [KIND[k], fmt(v.E, 1), fmt(v.D, 1), (v.E >= v.D ? '+' : '−') + fmt(Math.abs(v.E / v.D - 1) * 100, 1) + '%']; }).concat([['All payments', fmt(D.tx_per_E, 1), fmt(D.tx_per_D, 1), '+' + fmt((D.tx_per_E / D.tx_per_D - 1) * 100, 1) + '%']]), [1, 2, 3]);
+
+/* ---------- 3. time ---------- */
+let tMode = 'act';
+const TH = {act: ['Payments per customer per day', 'Average for each week before the alert'], amt: ['Average payment size', 'Standard size index for each week before the alert (higher means bigger payments)']};
+function drawTime() {
+  document.getElementById('h-time').innerHTML = `<b>${TH[tMode][0]}</b><span>${TH[tMode][1]}</span>`;
+  const wk = D.weeks.slice().reverse(); // index 0 = 25 weeks before ... last = last week
+  const kE = tMode + 'E', kD = tMode + 'D';
+  const {svg, W, H, show, hide} = setup('c-time', 280, TH[tMode][0] + ' by week before the alert, serious versus false alarm');
+  const m = {l: 40, r: 14, t: 12, b: 30};
+  const vals = wk.flatMap(w => [w[kE], w[kD]]); let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (tMode === 'act') { lo = 0; hi = Math.max(3.5, hi); } else { const p = (hi - lo) * .12; lo -= p; hi += p; }
+  const x = i => m.l + i * (W - m.l - m.r) / (wk.length - 1), y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+  const g = el('g', {}, svg);
+  ticks(lo, hi, 4).forEach(v => { if (v < lo - 1e-9 || v > hi + 1e-9) return; el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: C.grid}, g); txt(g, m.l - 8, y(v) + 4, Math.abs(v) < 1e-9 ? '0' : (tMode === 'act' ? fmt(v, v % 1 ? 1 : 0) : fmt(v, 1)), {'text-anchor': 'end'}); });
+  el('line', {x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: C.axis}, g);
+  [[0, '25 weeks before'], [12, '12 weeks'], [wk.length - 1, 'last week']].forEach(([i, s], j) => txt(g, x(i), H - 9, s, {'text-anchor': j === 0 ? 'start' : j === 2 ? 'end' : 'middle'}));
+  [[kD, C.f], [kE, C.s]].forEach(([k, c]) => el('polyline', {points: wk.map((w, i) => x(i) + ',' + y(w[k])).join(' '), fill: 'none', stroke: c, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}, g));
+  const cross = el('line', {y1: m.t, y2: H - m.b, stroke: C.ink, 'stroke-width': 1, opacity: 0}, g);
+  const dD = el('circle', {r: 4.5, fill: C.f, stroke: '#fff', 'stroke-width': 2, opacity: 0}, g), dE = el('circle', {r: 4.5, fill: C.s, stroke: '#fff', 'stroke-width': 2, opacity: 0}, g);
+  const hit = el('rect', {x: m.l - 6, y: m.t, width: W - m.l - m.r + 12, height: H - m.t - m.b, fill: 'transparent'}, g);
+  const move = e => {
+    const b = svg.getBoundingClientRect(), px = (e.clientX - b.left) * W / b.width;
+    const i = Math.max(0, Math.min(wk.length - 1, Math.round((px - m.l) / (W - m.l - m.r) * (wk.length - 1)))), w = wk[i];
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('opacity', .3);
+    dE.setAttribute('cx', x(i)); dE.setAttribute('cy', y(w[kE])); dD.setAttribute('cx', x(i)); dD.setAttribute('cy', y(w[kD])); dE.setAttribute('opacity', 1); dD.setAttribute('opacity', 1);
+    const when = w.wk === 0 ? 'Last week before the alert' : `${w.wk + 1} weeks before the alert`, d = tMode === 'act' ? 2 : 2;
+    show(x(i), Math.min(y(w[kE]), y(w[kD])), `<b>${fmt(w[kE], d)}</b> <span class="k" style="background:${C.s}"></span><span class="m">serious</span><br><b>${fmt(w[kD], d)}</b> <span class="k" style="background:${C.f}"></span><span class="m">false alarm</span><br><span class="m">${when}</span>`);
+  };
+  hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move);
+  hit.addEventListener('pointerleave', () => { hide(); [cross, dE, dD].forEach(n => n.setAttribute('opacity', 0)); });
+  table('t-time', ['Week before the alert', 'Serious', 'False alarm'], D.weeks.map(w => [w.wk === 0 ? 'Last week (days 1–7)' : `Week ${w.wk + 1} (days ${w.wk * 7 + 1}–${w.wk * 7 + 7})`, fmt(w[kE], 3), fmt(w[kD], 3)]), [1, 2]);
+}
+document.querySelectorAll('#b-time button').forEach(b => b.addEventListener('click', () => { tMode = b.dataset.v; document.querySelectorAll('#b-time button').forEach(o => o.setAttribute('aria-pressed', o === b)); drawTime(); }));
+
+/* ---------- 4a. bank groups ---------- */
+function drawBank() {
+  const {svg, W, H, show, hide} = setup('c-bank', 270, 'Share of serious alerts in ten groups by usual outgoing bank transfer size, falling from 23% to 12%');
+  const m = {l: 40, r: 8, t: 22, b: 38}, g = el('g', {}, svg), hi = .3, y = v => m.t + (hi - v) / hi * (H - m.t - m.b);
+  const n = D.bankdec.length, slot = (W - m.l - m.r) / n, bw = Math.min(24, slot * .6);
+  [0, .1, .2, .3].forEach(v => { el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: v === 0 ? C.axis : C.grid}, g); txt(g, m.l - 8, y(v) + 4, fmt(v * 100) + '%', {'text-anchor': 'end'}); });
+  D.bankdec.forEach(([r, cnt, ser], i) => {
+    const cx = m.l + slot * (i + .5), grp = el('g', {class: 'hit'}, g);
+    el('rect', {x: cx - slot / 2, y: m.t, width: slot, height: H - m.t - m.b, fill: 'transparent'}, grp);
+    vbar(grp, cx - bw / 2, y(0), bw, y(0) - y(r), C.s);
+    txt(g, cx, H - m.b + 15, String(i + 1), {'text-anchor': 'middle'});
+    if (i === 0 || i === n - 1) txt(g, cx, y(r) - 7, pct(r), {'text-anchor': 'middle', class: 't-ink', 'font-weight': 600});
+    hover(grp, () => { grp.setAttribute('opacity', 1); show(cx, y(r), `<b>${pct(r, 1)}</b> <span class="m">serious</span><br>Group ${i + 1} of 10${i === 0 ? ' (smallest transfers)' : i === n - 1 ? ' (largest transfers)' : ''}<br><span class="m">${fmt(ser)} of ${fmt(cnt)} alerts</span>`); }, hide);
+  });
+  const avg = D.nE / D.n;
+  el('line', {x1: m.l, x2: W - m.r, y1: y(avg), y2: y(avg), stroke: C.ink, 'stroke-width': 1}, g);
+  txt(g, W - m.r, y(avg) - 6, 'Average ' + pct(avg), {'text-anchor': 'end', class: 't-ink2', 'font-weight': 600});
+  txt(g, m.l, H - 3, '← smallest transfers', {}); txt(g, W - m.r, H - 3, 'largest transfers →', {'text-anchor': 'end'});
+}
+table('t-bank', ['Group', 'Alerts', 'Serious', 'Share serious'], D.bankdec.map(([r, c, s], i) => [String(i + 1) + (i === 0 ? ' (smallest)' : i === 9 ? ' (largest)' : ''), fmt(c), fmt(s), pct(r, 1)]), [1, 2, 3]);
+
+/* ---------- 4b. sizes by kind ---------- */
+const SIZE_KINDS = ['bank_otkazmasi_chiqim', 'bank_otkazmasi_kirim', 'naqd_kirim', 'karta_chiqim'];
+const SIZE_TEXT = {
+  bank_otkazmasi_chiqim: 'Small outgoing bank transfers are up to <strong>19% more common</strong> among serious customers. The largest ones are about <strong>27% less common</strong>.',
+  bank_otkazmasi_kirim: 'The same pattern for incoming transfers: small ones up to <strong>16% more common</strong>, the largest about <strong>25% less common</strong>.',
+  naqd_kirim: 'The opposite of bank transfers: the <strong>largest cash deposits</strong> are up to <strong>18% more common</strong> among serious customers.',
+  karta_chiqim: 'Both ends are more common among serious customers: the smallest card payments by up to <strong>13%</strong>, the largest by up to <strong>6%</strong>. Their card spending varies more.'};
+let sKind = 'bank_otkazmasi_chiqim';
+function drawSize() {
+  const pts = D.ratio[sKind];
+  const {svg, W, H, show, hide} = setup('c-size', 270, 'How much more or less common each payment size is among serious customers: ' + KIND[sKind]);
+  const m = {l: 44, r: 8, t: 22, b: 26}, g = el('g', {}, svg), lo = -.4, hi = .4, y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+  const n = pts.length, slot = (W - m.l - m.r) / n, bw = Math.min(24, slot * .7);
+  [-.4, -.2, 0, .2, .4].forEach(v => { el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: v === 0 ? C.ink : C.grid}, g); txt(g, m.l - 8, y(v) + 4, (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v) * 100) + '%', {'text-anchor': 'end'}); });
+  txt(g, m.l + 4, m.t - 8, 'More common among serious customers', {class: 't-ink2', 'font-size': 11.5});
+  txt(g, m.l + 4, H - m.b + 16, 'Less common', {class: 't-ink2', 'font-size': 11.5});
+  txt(g, W - m.r, H - 4, '← smaller payments · larger payments →', {'text-anchor': 'end', 'font-size': 11.5});
+  pts.forEach(([c, r, ce], i) => {
+    const v = r - 1, cx = m.l + slot * (i + .5), grp = el('g', {class: 'hit'}, g);
+    el('rect', {x: cx - slot / 2, y: m.t, width: slot, height: H - m.t - m.b, fill: 'transparent'}, grp);
+    vbar(grp, cx - bw / 2, y(0), bw, y(0) - y(v), v >= 0 ? C.s : C.f);
+    hover(grp, () => show(cx, Math.min(y(v), y(0)), `<b>${v >= 0 ? '+' : '−'}${fmt(Math.abs(v) * 100)}%</b> <span class="m">${v >= 0 ? 'more' : 'less'} common among serious customers</span><br><span class="m">Size band ${i + 1} of ${n} · ${fmt(ce)} payments of serious customers</span>`), hide);
+  });
+  document.getElementById('k-size').innerHTML = SIZE_TEXT[sKind];
+  table('t-size', ['Size band (small → large)', 'Difference for serious customers', 'Payments of serious customers'], pts.map(([c, r, ce], i) => [String(i + 1), (r >= 1 ? '+' : '−') + fmt(Math.abs(r - 1) * 100, 1) + '%', fmt(ce)]), [1, 2]);
+}
+(function () {
+  const bt = document.getElementById('b-size');
+  SIZE_KINDS.forEach(k => { const b = document.createElement('button'); b.textContent = KIND[k]; b.setAttribute('aria-pressed', k === sKind);
+    b.addEventListener('click', () => { sKind = k; [...bt.children].forEach(o => o.setAttribute('aria-pressed', o === b)); drawSize(); }); bt.appendChild(b); });
+})();
+
+/* ---------- 5a. scorecards ---------- */
+(function () {
+  const G = {bank: 'Bank transfer clues', cash: 'Cash clues', card: 'Card clues', other: 'Other clues'};
+  const SUB = {bank: D.pc_counts.bank + ' clues', cash: D.pc_counts.cash + ' clues', card: D.pc_counts.card + ' clues', other: D.pc_counts.other + ' clues: activity, timing, international'};
+  const mx = .35;
+  document.getElementById('cards').innerHTML = D.examples.map((e, j) => {
+    const serious = e.label === 1; let prev = null;
+    const rows = e.steps.map(([k, p]) => {
+      const arrow = prev === null ? '' : (Math.round(p * 100) > Math.round(prev * 100) ? '▲ ' : Math.round(p * 100) < Math.round(prev * 100) ? '▼ ' : '');
+      const r = `<tr><th>${k === 'start' ? 'Starting point<small>an alert where every clue is average</small>' : '+ ' + G[k] + '<small>' + SUB[k] + '</small>'}</th><td class="bar"><i style="width:${Math.min(100, p / mx * 100)}%"></i></td><td class="v">${arrow}${pct(p)}</td></tr>`;
+      prev = p; return r; }).join('');
+    const rank = serious ? `Our model puts it in the top ${Math.max(1, Math.ceil((1 - e.rank_pct) * 100))}% of all alerts.` : `Our model puts it in the bottom ${Math.max(1, Math.ceil(e.rank_pct * 100))}% of all alerts.`;
+    return `<div class="sc"><div class="sc-head"><b>Alert ${e.id}</b><span><i style="--c:${serious ? C.s : C.light}"></i>Specialist's decision: ${serious ? 'serious' : 'false alarm'}</span></div>
+      <table>${rows}<tr class="fin"><th>Final chance</th><td class="bar"></td><td class="v">${pct(e.p)}</td></tr></table><p class="sc-foot">${rank}</p></div>`;
+  }).join('');
+})();
+
+/* ---------- 5b. ladder ---------- */
+const LADDER = [['All payments mixed together', D.ladder[0][1], D.ladder[0][2] + ' clues', C.f],
+  ['Each kind of payment described separately', D.ladder[1][1], D.ladder[1][2] + ' clues', C.f],
+  ['+ size clues, compared fairly (final model)', D.ladder[2][1], D.ladder[2][2] + ' clues', C.o],
+  null,
+  ['Boosted trees (best of 4 settings)', D.trees, 'same 208 clues, more complex model', C.light]];
+function drawLadder() {
+  const box = document.getElementById('c-ladder'); const narrow = box.clientWidth < 560;
+  const rh = narrow ? 50 : 36, gap = 14, m = {l: narrow ? 8 : 262, r: 50, t: 6, b: 26};
+  const rows = LADDER; const H = m.t + m.b + rows.filter(Boolean).length * rh + gap;
+  const {svg, W} = setup('c-ladder', H, 'Model score after each step: 0.562, 0.634, 0.640; boosted trees 0.633');
+  const g = el('g', {}, svg), lo = .5, hi = .66, x = v => m.l + (v - lo) / (hi - lo) * (W - m.l - m.r);
+  const yEnd = H - m.b;
+  [.5, .55, .6, .65].forEach(v => { el('line', {x1: x(v), x2: x(v), y1: m.t, y2: yEnd, stroke: v === .5 ? C.axis : C.grid}, g); txt(g, x(v), H - 8, v.toFixed(2) + (v === .5 ? ' guessing' : ''), {'text-anchor': v === .5 ? 'start' : 'middle'}); });
+  let yy = m.t;
+  rows.forEach(r => {
+    if (!r) { el('line', {x1: 0, x2: W, y1: yy + gap / 2, y2: yy + gap / 2, stroke: C.grid}, g); yy += gap; return; }
+    const [lab, v, sub, c] = r;
+    if (narrow) { txt(g, m.l + 4, yy + 14, lab, {class: 't-ink', 'font-size': 12.5, stroke: '#fff', 'stroke-width': 4, 'paint-order': 'stroke'}); hbar(g, x(lo), yy + 22, x(v) - x(lo), 14, c); txt(g, x(v) + 6, yy + 33, v.toFixed(3), {class: 't-ink', 'font-weight': 600}); }
+    else { txt(g, m.l - 12, yy + rh / 2 - 1, lab, {'text-anchor': 'end', class: 't-ink', 'font-size': 13}); txt(g, m.l - 12, yy + rh / 2 + 13, sub, {'text-anchor': 'end', 'font-size': 11}); hbar(g, x(lo), yy + (rh - 16) / 2, x(v) - x(lo), 16, c); txt(g, x(v) + 6, yy + rh / 2 + 4, v.toFixed(3), {class: 't-ink', 'font-weight': 600}); }
+    yy += rh;
+  });
+}
+table('t-ladder', ['Step', 'Clues', 'ROC-AUC'], [[LADDER[0][0], String(D.ladder[0][2]), D.ladder[0][1].toFixed(3)], [LADDER[1][0], String(D.ladder[1][2]), D.ladder[1][1].toFixed(3)], [LADDER[2][0], String(D.ladder[2][2]), D.ladder[2][1].toFixed(3)], ['Boosted trees, 4 settings tried', '208', Object.values(D.trees_all).map(v => v.toFixed(3)).join(' / ')]], [1, 2]);
+
+/* ---------- 6. review simulator ---------- */
+(function () {
+  const wr = document.getElementById('w-rand'), wo = document.getElementById('w-ours');
+  const mk = (w, arr) => arr.map(v => { const s = document.createElement('i'); s.className = v ? 's' : 'f'; w.appendChild(s); return s; });
+  const R = mk(wr, D.grid_rand), O = mk(wo, D.grid_ours);
+  const bt = document.getElementById('b-k'); let k = 30;
+  function place(w, cut) {
+    const c = w.children, pitch = c[10].offsetTop - c[0].offsetTop, gap = pitch - c[0].offsetHeight;
+    cut.style.top = (k / 10 * pitch - gap / 2 - 1) + 'px';
+  }
+  function upd() {
+    let fr = 0, fo = 0;
+    R.forEach((s, i) => { s.classList.toggle('off', i >= k); if (i < k) fr += D.grid_rand[i]; });
+    O.forEach((s, i) => { s.classList.toggle('off', i >= k); if (i < k) fo += D.grid_ours[i]; });
+    document.getElementById('n-rand').textContent = fr; document.getElementById('n-ours').textContent = fo;
+    [...bt.children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.k === k));
+    place(wr, document.getElementById('cut-rand')); place(wo, document.getElementById('cut-ours'));
+    const d = fo - fr;
+    document.getElementById('r-text').textContent = `Checking ${k} alerts: ${fr} serious found without our model, ${fo} with it. Same work, ${d} more serious ${d === 1 ? 'case' : 'cases'} found.`;
+  }
+  [10, 20, 30, 40, 50, 60].forEach(v => { const b = document.createElement('button'); b.textContent = v; b.dataset.k = v; b.setAttribute('aria-label', v + ' alerts'); b.addEventListener('click', () => { k = v; upd(); }); bt.appendChild(b); });
+  upd(); addEventListener('resize', upd); if (document.fonts && document.fonts.ready) document.fonts.ready.then(upd);
+  const cnt = (arr, n) => arr.slice(0, n).reduce((a, b) => a + b, 0);
+  table('t-review', ['Alerts checked (of 100)', 'Serious found without our model', 'Serious found with our model', 'With our model, exact'], [10, 20, 30, 40, 50, 60, 100].map(n => [String(n), String(cnt(D.grid_rand, n)), String(cnt(D.grid_ours, n)), fmt(D.per100_ours[n], 1)]), [0, 1, 2, 3]);
+})();
+(function () {
+  const rows = D.quarters.map(q => [q[0].replace('Q', ' Q'), fmt(q[2]), pct(q[1], 1)]);
+  table('t-quarters', ['Quarter', 'Alerts', 'Serious'], rows, [1, 2]);
+  const x = document.getElementById('xall');
+  x.addEventListener('click', () => { const open = x.getAttribute('aria-expanded') !== 'true'; document.querySelectorAll('#details details').forEach(d => d.open = open); x.setAttribute('aria-expanded', open); x.textContent = open ? 'Close all' : 'Open all'; });
+})();
+
+/* ---------- details charts ---------- */
+const FN = {p_dq90_naqd_kirim: 'Largest cash deposits (top 10%)', max_naqd_kirim: 'Single largest cash deposit', std_bank_otkazmasi_kirim: 'How much incoming transfers vary', std_karta_chiqim: 'How much card spending varies', p_dsum_naqd_kirim: 'Total cash deposited', p_dsum_karta_chiqim: 'Total card spending', p_dq90_bank_otkazmasi_kirim: 'Largest incoming transfers (top 10%)', p_dmean_naqd_kirim: 'Average cash deposit', p_dq90_bank_otkazmasi_chiqim: 'Largest outgoing transfers (top 10%)', p_dq75_naqd_kirim: 'Larger cash deposits (top 25%)'};
+function drawWeights() {
+  const box = document.getElementById('c-weights'); if (!box.clientWidth) return; const narrow = box.clientWidth < 520;
+  const rows = D.weights, rh = narrow ? 42 : 30, m = {l: narrow ? 8 : 250, r: 44, t: 4, b: 6}, H = m.t + m.b + rows.length * rh;
+  const {svg, W, show, hide} = setup('c-weights', H, 'Ten largest weights in the final model');
+  const g = el('g', {}, svg), mx = .09, mid = narrow ? W / 2 : m.l + (W - m.l - m.r) / 2, half = narrow ? (W / 2 - 50) : (W - m.l - m.r) / 2, x = v => mid + v / mx * half;
+  el('line', {x1: mid, x2: mid, y1: m.t, y2: H - m.b, stroke: C.axis}, g);
+  rows.forEach(([k, v], i) => {
+    const yy = m.t + i * rh, grp = el('g', {class: 'hit'}, g);
+    el('rect', {x: 0, y: yy, width: W, height: rh, fill: 'transparent'}, grp);
+    const by = narrow ? yy + 20 : yy + 8, bh = narrow ? 14 : rh - 16;
+    if (narrow) txt(grp, v > 0 ? mid + 4 : mid - 4, yy + 14, FN[k] || k, {'text-anchor': v > 0 ? 'start' : 'end', class: 't-ink', 'font-size': 12});
+    else txt(grp, m.l - 12, yy + rh / 2 + 4, FN[k] || k, {'text-anchor': 'end', class: 't-ink', 'font-size': 13});
+    if (v >= 0) hbar(grp, mid, by, x(v) - mid, bh, C.s); else { const w = mid - x(v); el('path', {d: `M${mid},${by}H${mid - w + 4}Q${mid - w},${by} ${mid - w},${by + 4}V${by + bh - 4}Q${mid - w},${by + bh} ${mid - w + 4},${by + bh}H${mid}Z`, fill: C.f}, grp); }
+    txt(grp, v >= 0 ? x(v) + 5 : x(v) - 5, by + bh / 2 + 4, (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(3), {'text-anchor': v >= 0 ? 'start' : 'end', 'font-size': 11});
+    hover(grp, () => show(x(v), by, `<b>${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(3)}</b> <span class="m">weight</span><br>${FN[k]}<br><span class="m">${k}</span>`), hide);
+  });
+}
+function drawDeciles() {
+  const box = document.getElementById('c-deciles'); if (!box.clientWidth) return;
+  const {svg, W, H, show, hide} = setup('c-deciles', 250, 'Share of serious alerts in ten groups by model score, from 9% to 29%');
+  const m = {l: 40, r: 8, t: 22, b: 38}, g = el('g', {}, svg), hi = .3, y = v => m.t + (hi - v) / hi * (H - m.t - m.b);
+  const n = 10, slot = (W - m.l - m.r) / n, bw = Math.min(24, slot * .6);
+  [0, .1, .2, .3].forEach(v => { el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: v === 0 ? C.axis : C.grid}, g); txt(g, m.l - 8, y(v) + 4, fmt(v * 100) + '%', {'text-anchor': 'end'}); });
+  D.scoredec.forEach((r, i) => {
+    const cx = m.l + slot * (i + .5), grp = el('g', {class: 'hit'}, g);
+    el('rect', {x: cx - slot / 2, y: m.t, width: slot, height: H - m.t - m.b, fill: 'transparent'}, grp);
+    vbar(grp, cx - bw / 2, y(0), bw, y(0) - y(r), C.o);
+    txt(g, cx, H - m.b + 15, String(i + 1), {'text-anchor': 'middle'});
+    if (i === 0 || i === n - 1) txt(g, cx, y(r) - 7, pct(r), {'text-anchor': 'middle', class: 't-ink', 'font-weight': 600});
+    hover(grp, () => show(cx, y(r), `<b>${pct(r, 1)}</b> <span class="m">serious</span><br>Group ${i + 1} of 10 · 1,400 alerts`), hide);
+  });
+  const avg = D.nE / D.n;
+  el('line', {x1: m.l, x2: W - m.r, y1: y(avg), y2: y(avg), stroke: C.ink, 'stroke-width': 1}, g);
+  txt(g, m.l + 2, y(avg) - 6, 'Average ' + pct(avg), {class: 't-ink2', 'font-weight': 600});
+  txt(g, m.l, H - 3, '← lowest score', {}); txt(g, W - m.r, H - 3, 'highest score →', {'text-anchor': 'end'});
+}
+
+/* ---------- render ---------- */
+function all() { drawKinds(); drawTime(); drawBank(); drawSize(); drawLadder(); drawWeights(); drawDeciles(); }
+all();
+let lastW = innerWidth, rz; addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rz); rz = setTimeout(all, 150); });
+document.querySelectorAll('details').forEach(d => d.addEventListener('toggle', () => { if (d.open) { drawWeights(); drawDeciles(); } }));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(all);
+</script>
+</body></html>
